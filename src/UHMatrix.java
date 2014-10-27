@@ -1,6 +1,8 @@
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -9,28 +11,28 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public class MHMatrix
+public class UHMatrix
 {
 	private Map<Integer, ArrayList<Integer>> memberHotelMap;
-	private Map<Integer, ArrayList<Integer>> femaleHotelMap;
-	private Map<Integer, ArrayList<Integer>> maleHotelMap;
 	private Map<Integer, ArrayList<Integer>> hotelMemberMap;
-	private Map<Integer, Double> hotelTfIdfMap;
 	private double[][] matrix;
-	private int x;
-	private int y;
+	private int numHotels;
+	private int numUsers;
 
-	public MHMatrix()
+	public UHMatrix()
 	{
 		memberHotelMap = new HashMap<Integer, ArrayList<Integer>>();
-		femaleHotelMap = new HashMap<Integer, ArrayList<Integer>>();
-		maleHotelMap = new HashMap<Integer, ArrayList<Integer>>();
 		hotelMemberMap = new HashMap<Integer, ArrayList<Integer>>();
-		hotelTfIdfMap = new HashMap<Integer, Double>();
 	}
+	
+	/*public UHMatrix(String file) throws FileNotFoundException, IOException
+	{
+		UHMatrix matrix = new UHMatrix();
+		initialize(file);
+	}*/
 
 	/**
-	 * Initialize MHMatrix object.
+	 * Initialize UHMatrix object.
 	 * @param file
 	 * @throws FileNotFoundException
 	 * @throws IOException
@@ -38,9 +40,9 @@ public class MHMatrix
 	public void initialize(String file) throws FileNotFoundException, IOException
 	{
 		readVisitedHotels(file);
-		x = hotelMemberMap.size();
-		y = memberHotelMap.size();
-		matrix = new double[this.y][this.x];
+		numHotels = hotelMemberMap.size();
+		numUsers = memberHotelMap.size();
+		matrix = new double[numUsers][numHotels];
 
 		fillMatrix();
 		hotelTfIdf();
@@ -137,8 +139,10 @@ public class MHMatrix
 
 			while (line != null) {
 				String[] splitLine = line.split("\t");
-				int newUserIndex = Integer.parseInt(splitLine[0]);
-				int hotelVisited = Integer.parseInt(splitLine[1]);
+				
+				// use -1 to switch from 1-based indexing to 0-based indexing
+				int newUserIndex = Integer.parseInt(splitLine[0]) - 1;
+				int hotelVisited = Integer.parseInt(splitLine[1]) - 1;
 
 				// new user
 				if (newUserIndex != oldUserIndex) {
@@ -148,7 +152,6 @@ public class MHMatrix
 					if (oldUserIndex != -1) {
 
 						// update which hotels this user has been to
-						System.out.println(oldUserIndex);
 						memberHotelMap.put(oldUserIndex, thisUserHotels);
 					}
 
@@ -187,11 +190,11 @@ public class MHMatrix
 	public void fillMatrix()
 	{
 		for (int i = 0; i < this.matrix.length; i++) {
-			List<Integer> theseHotels = memberHotelMap.get(i + 1);
+			List<Integer> theseHotels = memberHotelMap.get(i);
 
 			// mark hotels that have been visited by user
 			for (int j = 0; j < theseHotels.size(); j++) {
-				matrix[i][theseHotels.get(j) - 1] = 1.0;
+				matrix[i][theseHotels.get(j)] = 1.0;
 			}
 		}
 	}
@@ -215,17 +218,14 @@ public class MHMatrix
 	}
 
 	/**
-	 * Calculate tfIdf scores for the MHMatrix.
+	 * Calculate tfIdf scores for the UHMatrix.
 	 */
 	private void hotelTfIdf()
 	{
 		int numCols = this.hotelMemberMap.size();
 		int numRows = this.memberHotelMap.size();
 
-		double[][] tfidfMatrix = new double[numRows][numCols];
 		double[][] newMatrix = new double[numRows][numCols];
-
-		Map<Integer, Double> hotelIdf = new HashMap<Integer, Double>();
 
 		for (int i = 0; i < numRows; i++) {
 
@@ -234,7 +234,7 @@ public class MHMatrix
 
 			for (int j = 0; j < numCols; j++) {
 				double termFreq = (double) rowHotels[j] / totalHotels; 
-				int hotelUsers = this.hotelMemberMap.get(j + 1).size();
+				int hotelUsers = this.hotelMemberMap.get(j).size();
 
 				double inverseDocFreq = (double) numRows / hotelUsers;
 
@@ -275,7 +275,7 @@ public class MHMatrix
 		ArrayList<Double> similarityScores = new ArrayList<Double>();
 		double[] thisRow = this.matrix[index];
 
-		for (int i = 0; i < this.y; i++) {
+		for (int i = 0; i < numUsers; i++) {
 			double[] compareRow = this.matrix[i];
 			double thisSimilarityScore = jaccard(thisRow, compareRow);
 			similarityScores.add(i, thisSimilarityScore);
@@ -291,13 +291,13 @@ public class MHMatrix
 	 */
 	private double[] getSumWeights(ArrayList<Double> similarityScores)
 	{
-		double[] sumWeightedScores = new double[this.x];
+		double[] sumWeightedScores = new double[numHotels];
 
-		for (int i = 0; i < this.y; i++) {
+		for (int i = 0; i < numUsers; i++) {
 			double[] tfIdfScores = this.matrix[i];
 			double userSimilarityWeight = similarityScores.get(i);
 
-			for (int j = 0; j < this.x; j++) {
+			for (int j = 0; j < numHotels; j++) {
 				sumWeightedScores[j] += userSimilarityWeight * tfIdfScores[j];
 			}
 		}
@@ -306,9 +306,9 @@ public class MHMatrix
 			System.out.println(similarityScores.get(i));
 			System.out.println(sumWeightedScores[i]);
 		}*/
-		System.out.println();
-		System.out.println("These are our sum weights: ");
-		System.out.println(Arrays.toString(sumWeightedScores));
+//		System.out.println();
+//		System.out.println("These are our sum weights: ");
+//		System.out.println(Arrays.toString(sumWeightedScores));
 
 		return sumWeightedScores;
 	}
@@ -319,32 +319,51 @@ public class MHMatrix
 	 * @param index
 	 * @return
 	 */
-	private int getBestHotelIndex(double[] sumWeights, int index)
+	private int getBestHotel(int index)
 	{
-		ArrayList<Integer> visited = this.memberHotelMap.get(index + 1);
-		//		System.out.println(visited.size());
-		System.out.println();
-		System.out.println("Eliminate these choices");
-		for(int i = 0; i < visited.size(); i++) {
-			System.out.println(visited.get(i));
-		}
-		System.out.println();
+		ArrayList<Double> similarityScores = getSimilarityScores(index);
+		double[] sumWeights = getSumWeights(similarityScores);
+		
+		ArrayList<Integer> visited = this.memberHotelMap.get(index);
+
+//		System.out.println();
+//		System.out.println("Eliminate these choices");
+//		for(int i = 0; i < visited.size(); i++) {
+//			System.out.println(visited.get(i));
+//		}
+//		System.out.println();
 
 		double maxWeight = Double.NEGATIVE_INFINITY;
-		int bestHotel = -1;
+		int bestHotelIndex = -1;
 
-		for (int i = 0; i < this.x; i++) {
+		for (int i = 0; i < numHotels; i++) {
 			if (sumWeights[i] > maxWeight) {
-				if (!visited.contains(i + 1)) { 
+				if (!visited.contains(i)) { 
 					maxWeight = sumWeights[i];
-					bestHotel = i;
+					bestHotelIndex = i;
 				}
 			}
 		}
 
-		return bestHotel + 1;
+		int bestHotel = bestHotelIndex + 1;
+		return bestHotel;
 	}
 
+	/**
+	 * Return a 0-indexed list of hotel preferences. User 1's hotel preference
+	 * is at index 0.
+	 * @return
+	 */
+	private ArrayList<Integer> getBestHotels() 
+	{
+		ArrayList<Integer> bestHotels = new ArrayList<Integer>();
+		
+		for (int i = 0; i < numUsers; i++) {
+			bestHotels.add(i, getBestHotel(i));
+		}
+		
+		return bestHotels;
+	}
 
 
 	/**
@@ -377,42 +396,59 @@ public class MHMatrix
 	}
 
 
+	public static void writeCSV(ArrayList<Integer> results, String file) 
+			throws IOException
+	{
+		String delimiter = "\t";
+		String columns = "Users" + delimiter + "Hotel" + "\n";
+		
+		BufferedWriter out = null;
+		try  
+		{
+		    FileWriter fstream = new FileWriter(file, false); 
+		    out = new BufferedWriter(fstream);
+		    out.write(columns);
+		    for (int i = 0; i < results.size(); i++) {
+		    	out.write((i+1) + delimiter + results.get(i) + "\n");
+		    }
+		}
+		catch (IOException e)
+		{
+		    System.err.println("Error: " + e.getMessage());
+		}
+		finally
+		{
+		    if(out != null) {
+		        out.close();
+		    }
+		}
+	}
+	
 	public static void main(String[] args) 
 			throws FileNotFoundException, IOException
 	{
-		MHMatrix matrix = new MHMatrix();
+		UHMatrix matrix = new UHMatrix();
 		matrix.initialize("activity.txt");
-		//				System.out.println(matrix.memberHotelMap.size());
-		//		System.out.println(matrix.hotelMemberMap.size());
 
-		//		iterateMap(matrix.memberHotelMap);
-		//		System.out.println(matrix.memberHotelMap.size());
-		//				System.out.println(matrix.hotelMemberMap.get(11).size());
+		int indexToTest = 0;
 
-		//		System.out.println(matrix.matrix.length);
-		//		System.out.println(matrix.matrix[0].size());
-		/*for (int i = 0; i < matrix.matrix[0].length; i++) {
-			System.out.println(matrix.matrix[0][i]);
-		}*/
-
-		//		System.out.println(matrix.matrix[0][38]);
-		//		System.out.println(matrix.matrix[0][43]);
-		//		System.out.println(matrix.matrix[2][3]);
-		//		System.out.println(matrix.matrix[2][4]);
-
-		int indexToTest = 6;
-
-		for (int i = 0; i < matrix.matrix.length; i++) {
-			System.out.println(Arrays.toString(matrix.matrix[i]));
-		}
-		ArrayList<Double> similarityScores = matrix.getSimilarityScores(indexToTest); 
+//		for (int i = 0; i < matrix.matrix.length; i++) {
+//			System.out.println(Arrays.toString(matrix.matrix[i]));
+//		}
+		 
 		//		for (int i = 0; i < similarityScores.size(); i++) {
 		//			System.out.println(similarityScores.get(i));
 		//		}
-		double[] sumWeights = matrix.getSumWeights(similarityScores);
-		int bestIndex = matrix.getBestHotelIndex(sumWeights, indexToTest);
-		System.out.println("best " + bestIndex);
+//		
+//		int bestHotel = matrix.getBestHotel(indexToTest);
+//		System.out.println("best " + bestHotel);
 
+		ArrayList<Integer> bestHotels = matrix.getBestHotels();
+		/*for (Integer integer : bestHotels) {
+			System.out.println(integer);
+		}*/
+		
+		writeCSV(bestHotels, "results.txt");
 		//XXX: TODO: return most popular value for visitors that have nothing
 		// in common with other visitors
 	}
